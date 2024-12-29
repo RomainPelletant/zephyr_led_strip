@@ -1,0 +1,8 @@
+
+wheel
+west==1.2.0
+flawfinder==2.0.19
+patch==1.*
+
+sbom2doc
+cve-bin-tool

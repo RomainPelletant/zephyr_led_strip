@@ -1,15 +1,35 @@
-# Copyright (c) 2021 Nordic Semiconductor ASA
+# Copyright (c) 2019 Nordic Semiconductor ASA
 # SPDX-License-Identifier: Apache-2.0
-#
-# This file is the application Kconfig entry point. All application Kconfig
-# options can be defined here or included via other application Kconfig files.
-# You can browse these options using the west targets menuconfig (terminal) or
-# guiconfig (GUI).
-
-menu "Zephyr"
-source "Kconfig.zephyr"
-endmenu
 
 module = APP
 module-str = APP
 source "subsys/logging/Kconfig.template.log_config"
+
+
+menu "WS2812 Sample Configuration"
+
+config SAMPLE_LED_UPDATE_DELAY
+	int "Delay between LED updates in ms"
+	default 50
+	help
+	  Delay between LED updates in ms.
+
+config APP_IMPLEMENT_BT
+	bool "Implement Bluetooth connectivity"
+	select CONFIG_BT
+	select CONFIG_BT_ESP32
+	select CONFIG_BT_PERIPHERAL
+	select CONFIG_BT_SMP
+	default y
+	help
+	  Add Bluetooth connectivity (peripheral mode).
+
+config APP_BT_DEVICE_NAME
+    string "Bluetooth Device Name"
+    default "LED strip" if APP_IMPLEMENT_BT
+    help
+      Set the Bluetooth device name.
+
+endmenu
+
+source "Kconfig.zephyr"

@@ -1,0 +1,198 @@
+diff --git forkSrcPrefix/drivers/led_strip/ws2812_spi.c forkDstPrefix/drivers/led_strip/ws2812_spi.c
+index a5ce42190c3ec1a96ad474bcaf1506957f22c977..f120818e6fca4f7e14f8f97086576c479cb6f188 100644
+--- forkSrcPrefix/drivers/led_strip/ws2812_spi.c
++++ forkDstPrefix/drivers/led_strip/ws2812_spi.c
+@@ -36,14 +36,17 @@ LOG_MODULE_REGISTER(ws2812_spi);
+ #define SPI_OPER(idx) (SPI_OP_MODE_MASTER | SPI_TRANSFER_MSB | \
+ 		  SPI_WORD_SET(SPI_FRAME_BITS))
+ 
++struct ws2812_spi_data {
++	size_t length;
++	uint8_t *px_buf;
++};
++
+ struct ws2812_spi_cfg {
+ 	struct spi_dt_spec bus;
+-	uint8_t *px_buf;
+ 	uint8_t one_frame;
+ 	uint8_t zero_frame;
+ 	uint8_t num_colors;
+ 	const uint8_t *color_mapping;
+-	size_t length;
+ 	uint16_t reset_delay;
+ };
+ 
+@@ -52,6 +55,23 @@ static const struct ws2812_spi_cfg *dev_cfg(const struct device *dev)
+ 	return dev->config;
+ }
+ 
++static int dynamically_allocate_buffer(const struct device *dev)
++{
++	struct ws2812_spi_data *data = dev->data;
++	const struct ws2812_spi_cfg *cfg = dev_cfg(dev);
++
++	uint8_t *newbuf = k_realloc(data->px_buf, data->length * 8 * cfg->num_colors);
++	if (newbuf == NULL) {
++		LOG_ERR("Failed to allocate memory for pixel buffer");
++		return -ENOMEM;
++	}
++
++	data->px_buf = newbuf;
++	LOG_INF("dynamic allocation OK");
++
++	return 0;
++}
++
+ /*
+  * Serialize an 8-bit color channel value into an equivalent sequence
+  * of SPI frames, MSbit first, where a one bit becomes SPI frame
+@@ -80,16 +100,17 @@ static int ws2812_strip_update_rgb(const struct device *dev,
+ 				   size_t num_pixels)
+ {
+ 	const struct ws2812_spi_cfg *cfg = dev_cfg(dev);
++	struct ws2812_spi_data *data = dev->data;
+ 	const uint8_t one = cfg->one_frame, zero = cfg->zero_frame;
+ 	struct spi_buf buf = {
+-		.buf = cfg->px_buf,
+-		.len = (cfg->length * 8 * cfg->num_colors),
++		.buf = data->px_buf,
++		.len = (data->length * 8 * cfg->num_colors),
+ 	};
+ 	const struct spi_buf_set tx = {
+ 		.buffers = &buf,
+ 		.count = 1
+ 	};
+-	uint8_t *px_buf = cfg->px_buf;
++	uint8_t *px_buf = data->px_buf;
+ 	size_t i;
+ 	int rc;
+ 
+@@ -136,9 +157,22 @@ static int ws2812_strip_update_rgb(const struct device *dev,
+ 
+ static size_t ws2812_strip_length(const struct device *dev)
+ {
+-	const struct ws2812_spi_cfg *cfg = dev_cfg(dev);
++	const struct ws2812_spi_data *data = dev->data;
++
++	return data->length;
++}
++
++static int ws2812_strip_set_length(const struct device *dev, size_t length)
++{
++	struct ws2812_spi_data *data = dev->data;
++
++	if (length == 0U) {
++		return -EINVAL;
++	}
++
++	data->length = length;
+ 
+-	return cfg->length;
++	return dynamically_allocate_buffer(dev);
+ }
+ 
+ static int ws2812_spi_init(const struct device *dev)
+@@ -166,12 +200,13 @@ static int ws2812_spi_init(const struct device *dev)
+ 		}
+ 	}
+ 
+-	return 0;
++	return dynamically_allocate_buffer(dev);
+ }
+ 
+ static DEVICE_API(led_strip, ws2812_spi_api) = {
+ 	.update_rgb = ws2812_strip_update_rgb,
+ 	.length = ws2812_strip_length,
++	.set_length = ws2812_strip_set_length,
+ };
+ 
+ #define WS2812_SPI_NUM_PIXELS(idx) \
+@@ -199,29 +234,28 @@ static DEVICE_API(led_strip, ws2812_spi_api) = {
+ #define WS2812_RESET_DELAY(idx) DT_INST_PROP(idx, reset_delay)
+ 
+ #define WS2812_SPI_DEVICE(idx)						 \
+-									 \
+-	static uint8_t ws2812_spi_##idx##_px_buf[WS2812_SPI_BUFSZ(idx)]; \
+-									 \
+ 	WS2812_COLOR_MAPPING(idx);					 \
++	\
++	static struct ws2812_spi_data ws2812_spi_##idx##_data = {	 \
++		.length = DT_INST_PROP(idx, chain_length),               \
++	};								 \
+ 									 \
+ 	static const struct ws2812_spi_cfg ws2812_spi_##idx##_cfg = {	 \
+ 		.bus = SPI_DT_SPEC_INST_GET(idx, SPI_OPER(idx), 0),	 \
+-		.px_buf = ws2812_spi_##idx##_px_buf,			 \
+ 		.one_frame = WS2812_SPI_ONE_FRAME(idx),			 \
+ 		.zero_frame = WS2812_SPI_ZERO_FRAME(idx),		 \
+ 		.num_colors = WS2812_NUM_COLORS(idx),			 \
+ 		.color_mapping = ws2812_spi_##idx##_color_mapping,	 \
+-		.length = DT_INST_PROP(idx, chain_length),               \
+ 		.reset_delay = WS2812_RESET_DELAY(idx),			 \
+ 	};								 \
+ 									 \
+ 	DEVICE_DT_INST_DEFINE(idx,					 \
+ 			      ws2812_spi_init,				 \
+ 			      NULL,					 \
+-			      NULL,					 \
++			      &ws2812_spi_##idx##_data,					 \
+ 			      &ws2812_spi_##idx##_cfg,			 \
+ 			      POST_KERNEL,				 \
+ 			      CONFIG_LED_STRIP_INIT_PRIORITY,		 \
+ 			      &ws2812_spi_api);
+ 
+-DT_INST_FOREACH_STATUS_OKAY(WS2812_SPI_DEVICE)
++DT_INST_FOREACH_STATUS_OKAY(WS2812_SPI_DEVICE)
+\ No newline at end of file
+diff --git forkSrcPrefix/include/zephyr/drivers/led_strip.h forkDstPrefix/include/zephyr/drivers/led_strip.h
+index 7c297cbc6cdc1841ced9c65974817200d19b2f29..e7ebaa7a40ff77ea251fcdba7948ff9382f7ff2b 100644
+--- forkSrcPrefix/include/zephyr/drivers/led_strip.h
++++ forkDstPrefix/include/zephyr/drivers/led_strip.h
+@@ -81,6 +81,14 @@ typedef int (*led_api_update_channels)(const struct device *dev,
+  */
+ typedef size_t (*led_api_length)(const struct device *dev);
+ 
++/**
++ * @typedef led_api_set_length
++ * @brief Callback API for setting length of an LED strip.
++ *
++ * @see led_strip_set_length() for argument descriptions.
++ */
++typedef int (*led_api_set_length)(const struct device *dev, size_t length);
++
+ /**
+  * @brief LED strip driver API
+  *
+@@ -90,6 +98,7 @@ __subsystem struct led_strip_driver_api {
+ 	led_api_update_rgb update_rgb;
+ 	led_api_update_channels update_channels;
+ 	led_api_length length;
++	led_api_set_length set_length;
+ };
+ 
+ /**
+@@ -168,6 +177,24 @@ static inline size_t led_strip_length(const struct device *dev)
+ 	return api->length(dev);
+ }
+ 
++/**
++ * @brief	Optional function to set chain length (in pixels) of an LED strip device.
++ *
++ * @param dev	LED strip device.
++ * @param length	New LED strip length.
++ *
++ * @retval		0 on success.
++ * @retval		-ENOSYS if not implemented.
++ * @retval		-errno negative errno code on other failure.
++ */
++static inline int led_strip_set_length(const struct device *dev, size_t length)
++{
++	const struct led_strip_driver_api *api =
++		(const struct led_strip_driver_api *)dev->api;
++
++	return api->set_length(dev, length);
++}
++
+ #ifdef __cplusplus
+ }
+ #endif

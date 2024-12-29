@@ -1,0 +1,22 @@
+{
+    "image": "zephyrprojectrtos/ci:v0.26.12",
+  
+    "customizations": {
+      "vscode": {
+        "extensions": ["nordic-semiconductor.nrf-kconfig",
+                       "nordic-semiconductor.nrf-devicetree",
+                       "xaver.clang-format",
+                       "ms-vscode.cpptools",
+                       "ms-vscode.cmake-tools",
+                       "ms-vscode.cpptools-extension-pack"]
+      }
+    },
+
+    "forwardPorts": [22, 80, 443],
+    "workspaceMount": "source=${localWorkspaceFolder}/../,target=/workspace,type=bind",
+    "workspaceFolder": "/workspace",
+    "containerEnv": {
+      "SHELL": "/bin/bash"
+    },
+    "postCreateCommand": "cd strip_esp32 && west init -l && west update"
+}

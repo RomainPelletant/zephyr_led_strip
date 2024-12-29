@@ -1,16 +1,11 @@
-# This file is provided so that the application can be compiled using Twister,
-# the Zephyr testing tool. In this file, multiple combinations can be specified,
-# so that you can easily test all of them locally or in CI.
 sample:
-  description: Example application
-  name: example-application 
-common:
-  build_only: true
-  integration_platforms:
-    - custom_plank
-    - nucleo_f302r8
+  description: Demonstration of the LED strip driver
+  name: LED strip sample
 tests:
-  app.default: {}
-  app.debug:
-    extra_overlay_confs:
-      - debug.conf
+  sample.drivers.led_strip:
+    tags: LED
+    filter: dt_alias_exists("led-strip")
+    harness_config:
+      fixture: fixture_led_strip
+    integration_platforms:
+      - mimxrt1050_evk

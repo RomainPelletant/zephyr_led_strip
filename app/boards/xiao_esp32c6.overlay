@@ -1,0 +1,101 @@
+/*
+ * Copyright (c) 2022 Espressif Systems (Shanghai) Co., Ltd.
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
+ #include <zephyr/dt-bindings/led/led.h>
+ #include <zephyr/dt-bindings/input/input-event-codes.h>
+
+ &spi2 {
+     /* Workaround to support WS2812 driver */
+     line-idle-low;
+ 
+         led_strip: ws2812@0 {
+                 compatible = "worldsemi,ws2812-spi";
+ 
+                 /* SPI */
+                 reg = <0>; /* ignored, but necessary for SPI bindings */
+                 spi-max-frequency = <6400000>;
+ 
+                 /* WS2812 */
+                 chain-length = <28>; /* arbitrary; change at will */
+                 spi-cpha;
+                 spi-one-frame = <0xf0>; /* 11110000: 625 ns high and 625 ns low */
+                 spi-zero-frame = <0xc0>; /* 11000000: 312.5 ns high and 937.5 ns low */
+                 color-mapping = <LED_COLOR_ID_RED
+                                  LED_COLOR_ID_GREEN
+                                  LED_COLOR_ID_BLUE>;
+         };
+ };
+
+ &i2c0 {
+        clock-frequency = <I2C_BITRATE_STANDARD>;
+        capacitive: cap12xx@28 {
+                compatible = "microchip,cap12xx";
+                reg = <0x28>;
+                //int-gpios = <&gpio0 16 GPIO_ACTIVE_LOW>;
+                input-codes = <INPUT_KEY_0>, <INPUT_KEY_1>, <INPUT_KEY_2>;
+                //repeat;
+                poll-interval-ms = <2>;
+        };
+};
+ 
+ / {
+        longpress: longpress {
+                input = <&capacitive>;
+                compatible = "zephyr,input-longpress";
+                input-codes = <INPUT_KEY_0>, <INPUT_KEY_1>, <INPUT_KEY_2>;
+                long-codes = <INPUT_KEY_X>, <INPUT_KEY_Y>, <INPUT_KEY_Z>;
+                long-delay-ms = <1000>;
+        };
+         aliases {
+                 led-strip = &led_strip;
+                 touch = &capacitive;
+                 long-touch = &longpress;
+                 wakeup-pin = &wakeup;
+         };
+         gpio_keys {
+		compatible = "gpio-keys";
+		wakeup: wakeup_it {
+			label = "Wakeup pin";
+			gpios = <&gpio0 16 GPIO_ACTIVE_LOW>;
+                        zephyr,code = <INPUT_KEY_6>;
+		};
+	};
+
+         
+ };
+
+&flash0 {
+	partitions {
+		compatible = "fixed-partitions";
+		#address-cells = <1>;
+		#size-cells = <1>;
+
+                /delete-property/ slot0_partition;
+                /delete-property/ slot1_partition;
+
+		//boot_partition: partition@0 {
+		//	label = "mcuboot";
+		//	reg = <0x00000000 DT_SIZE_K(128)>;
+		//};
+		slot0_partition: partition@20000 {
+			label = "image-0";
+			reg = <0x00020000 0x1d0000>;
+		};
+		slot1_partition: partition@1F0000 {
+			//label = "image-1";
+			reg = <0x001f0000 0x1d0000>;
+		};
+		storage_partition: partition@3C0000 {
+			label = "storage";
+			reg = <0x003c0000 DT_SIZE_K(60)>;
+		};
+                factory_partition: partition@3C9000 {
+			label = "factory";
+			reg = <0x003c9000 DT_SIZE_K(64)>;
+		};
+        };
+};
+

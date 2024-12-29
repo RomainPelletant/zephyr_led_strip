@@ -1,6 +1,16 @@
 west-commands:
-  - file: scripts/example_west_command.py
+  - file: scripts/patch_zephyr.py
     commands:
-      - name: example-west-command
-        class: ExampleWestCommand
-        help: an example west extension command
+      - name: patch-zephyr
+        class: PatchZephyr
+        help: Zephyr patcher
+  - file: scripts/patch_ncs.py
+    commands:
+      - name: patch-ncs
+        class: PatchNCS
+        help: NCS (Nordic Connect SDK) layer patcher
+  - file: scripts/patch_modules.py
+    commands:
+      - name: patch-modules
+        class: PatchModules
+        help: Modules patcher
